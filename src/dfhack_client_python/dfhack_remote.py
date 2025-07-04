@@ -1,11 +1,9 @@
-import os, sys
+import sys
 import asyncio
 import functools
 from enum import IntEnum
 
-sys.path.append('./py_export/');
-import py_export.CoreProtocol_pb2 as CoreProtocol_pb2
-from py_export.CoreProtocol_pb2 import EmptyMessage, StringMessage
+from .py_export.CoreProtocol_pb2 import EmptyMessage, StringMessage, CoreBindReply, CoreBindRequest, CoreTextNotification
 
 _reader, _writer = None, None
 
@@ -33,11 +31,11 @@ def request(id, msg):
 
 def unmarshal(id, msg):
     if id == DFHackReplyCode.RPC_REPLY_RESULT:
-        obj = CoreProtocol_pb2.CoreBindReply()
+        obj = CoreBindReply()
         obj.ParseFromString(msg)
         return obj.assigned_id
     elif id == DFHackReplyCode.RPC_REPLY_TEXT:
-        obj = CoreProtocol_pb2.CoreTextNotification()
+        obj = CoreTextNotification()
         obj.ParseFromString(msg)
         raise Exception(obj)
     # TODO others
@@ -46,7 +44,7 @@ def unmarshal(id, msg):
 async def BindMethod(method, input_msg, output_msg, plugin=''):
     """Issue a CoreBindRequest to DFHack and caches the returned identifier number
     """
-    br = CoreProtocol_pb2.CoreBindRequest()
+    br = CoreBindRequest()
     br.method, br.input_msg, br.output_msg, br.plugin = \
         method, input_msg.DESCRIPTOR.full_name, output_msg.DESCRIPTOR.full_name, plugin
     _writer.write( request(0, br) )

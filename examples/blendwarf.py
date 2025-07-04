@@ -1,11 +1,11 @@
 import asyncio
-from dfhack_remote import remote, connect, close, StringMessage, EmptyMessage
+from dfhack_client_python.dfhack_remote import remote, connect, close, StringMessage, EmptyMessage
 
 ## Declare DFHack exported interfaces
 @remote
 async def GetVersion(output: StringMessage = None): pass 
 
-from BasicApi_pb2 import GetWorldInfoOut
+from dfhack_client_python.py_export.BasicApi_pb2 import GetWorldInfoOut
 @remote
 async def GetWorldInfo(output: GetWorldInfoOut = None): pass 
 
