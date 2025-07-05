@@ -152,7 +152,10 @@ def remote(plugin=''):
             input = p['input'].annotation
         except KeyError:
             input = EmptyMessage
-        output = p['output'].annotation
+        try:
+            output = p['output'].annotation
+        except KeyError:
+            output = EmptyMessage
         return update_wrapper(wrapper, f)
 
     # For ease of writing signatures, let's use 'plugin' also for plain decorator
