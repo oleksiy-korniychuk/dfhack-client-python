@@ -5,6 +5,7 @@ description = "A python library for interacting with the DFHack through its cust
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "async-lru>=2.0.5",
     "protobuf>=6.31.1",
     "requests>=2.32.4",
 ]

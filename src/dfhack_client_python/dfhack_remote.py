@@ -1,6 +1,6 @@
 import sys
 import asyncio
-import functools
+from async_lru import alru_cache
 from enum import IntEnum
 
 from .py_export.CoreProtocol_pb2 import EmptyMessage, CoreBindReply, CoreBindRequest, CoreTextNotification, CoreErrorNotification
@@ -61,7 +61,7 @@ def unmarshal(id, msg):
     else:
         raise DFHackError(f"Unknown reply code: {id}")
 
-@functools.lru_cache(maxsize=65534)
+@alru_cache(maxsize=65534)
 async def BindMethod(method, input_msg, output_msg, plugin=''):
     """Issue a CoreBindRequest to DFHack and caches the returned identifier number"""
     br = CoreBindRequest()
