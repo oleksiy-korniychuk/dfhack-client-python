@@ -105,8 +105,8 @@ def remote(plugin=''):
 
     async def wrapper(*args, **kwds):
         _id = await BindMethod(function.__name__, input, output, plugin=_plugin, **kwds)
-
-        _writer.write( request(_id, input()) )
+        input_value = kwds.get('input') if 'input' in kwds else (args[0] if args else None)
+        _writer.write( request(_id, input_value) )
 
         # According to the protocol, the server may send zero or more RPC_REPLY_TEXT
         # messages followed by either RPC_REPLY_RESULT or RPC_REPLY_FAIL
