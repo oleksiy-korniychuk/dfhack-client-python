@@ -2,6 +2,7 @@ import sys
 import asyncio
 from async_lru import alru_cache
 from enum import IntEnum
+from inspect import signature, Parameter
 
 from .py_export.CoreProtocol_pb2 import EmptyMessage, CoreBindReply, CoreBindRequest, CoreTextNotification, CoreErrorNotification
 
@@ -88,80 +89,76 @@ async def connect():
     if b'DFHack!\n\x01\x00\x00\x00' != msg:  # handshake_reply
         _reader, _writer = None, None
 
-def remote(plugin=''):
-    """ Decorator that uses type annotations to bind DFHack Remote functions
+def get_param_type(param):
+    if param and param.annotation != Parameter.empty:
+        return param.annotation
+    return EmptyMessage
 
-    Example:
-    @remote(plugin='RemoteFortressReader')
-    async def GetVersionInfo(input: EmptyMessage = None, output: VersionInfo = None):
-
-    @remote
-    async def GetVersion(output: StringMessage = None): 
-    """
-
-    from functools import update_wrapper
-    from inspect import signature
-    input, output, function, _plugin = None, None, None, None
-
-    async def wrapper(*args, **kwds):
-        _id = await BindMethod(function.__name__, input, output, plugin=_plugin, **kwds)
-        input_value = kwds.get('input') if 'input' in kwds else (args[0] if args else None)
-        _writer.write( request(_id, input_value) )
-
-        # According to the protocol, the server may send zero or more RPC_REPLY_TEXT
-        # messages followed by either RPC_REPLY_RESULT or RPC_REPLY_FAIL
-        while True:
-            id, size = await get_header()
+def remote(func=None, *, plugin=''):
+    """Decorator for DFHack remote functions.
+    
+    Usage:
+        @remote
+        async def GetVersion(output: StringMessage = None): 
+            pass
             
-            if id == DFHackReplyCode.RPC_REPLY_TEXT:
-                # Handle text notification
-                buffer = await _reader.read(size)
-                size -= len(buffer)
-                while size:
-                    more = await _reader.read(size)
-                    buffer += more
-                    size -= len(more)
-                text_obj = CoreTextNotification()
-                text_obj.ParseFromString(buffer)
-                # Log text notifications to standard output
-                print(f"[INFO] DFHack: {text_obj.text}")
-                continue
-            elif id == DFHackReplyCode.RPC_REPLY_RESULT:
-                # Handle successful result
-                buffer = await _reader.read(size)
-                size -= len(buffer)
-                while size:
-                    more = await _reader.read(size)
-                    buffer += more
-                    size -= len(more)
-                obj = output()
-                obj.ParseFromString(buffer)
-                return obj
-            elif id == DFHackReplyCode.RPC_REPLY_FAIL:
-                # This should have been handled in get_header(), but just in case
-                error_code = size
-                raise DFHackError(error_code)
-            else:
-                raise DFHackError(f"Unexpected reply code: {id}")
+        @remote(plugin='RemoteFortressReader')
+        async def GetVersionInfo(input: EmptyMessage = None, output: VersionInfo = None):
+            pass
+    """
+    from functools import update_wrapper
+    
+    def decorator(f):
+        params = signature(f).parameters
+        input_type = get_param_type(params.get('input'))
+        output_type = get_param_type(params.get('output'))
 
-    def parse(f):
-        nonlocal input, output, function
-        function = f
-        p = signature(f).parameters
-        try:
-            input = p['input'].annotation
-        except KeyError:
-            input = EmptyMessage
-        try:
-            output = p['output'].annotation
-        except KeyError:
-            output = EmptyMessage
+        async def wrapper(*args, **kwargs):
+            _id = await BindMethod(f.__name__, input_type, output_type, plugin=plugin)
+            input_value = kwargs.get('input') if kwargs.get('input') else input_type()
+            _writer.write( request(_id, input_value) )
+
+            # According to the protocol, the server may send zero or more RPC_REPLY_TEXT
+            # messages followed by either RPC_REPLY_RESULT or RPC_REPLY_FAIL
+            while True:
+                id, size = await get_header()
+                
+                if id == DFHackReplyCode.RPC_REPLY_TEXT:
+                    # Handle text notification
+                    buffer = await _reader.read(size)
+                    size -= len(buffer)
+                    while size:
+                        more = await _reader.read(size)
+                        buffer += more
+                        size -= len(more)
+                    text_obj = CoreTextNotification()
+                    text_obj.ParseFromString(buffer)
+                    # Log text notifications to standard output
+                    print(f"[INFO] DFHack: {text_obj.text}")
+                    continue
+                elif id == DFHackReplyCode.RPC_REPLY_RESULT:
+                    # Handle successful result
+                    buffer = await _reader.read(size)
+                    size -= len(buffer)
+                    while size:
+                        more = await _reader.read(size)
+                        buffer += more
+                        size -= len(more)
+                    obj = output_type()
+                    obj.ParseFromString(buffer)
+                    return obj
+                elif id == DFHackReplyCode.RPC_REPLY_FAIL:
+                    # This should have been handled in get_header(), but just in case
+                    error_code = size
+                    raise DFHackError(error_code)
+                else:
+                    raise DFHackError(f"Unexpected reply code: {id}")
+
         return update_wrapper(wrapper, f)
-
-    # For ease of writing signatures, let's use 'plugin' also for plain decorator
-    if isinstance(plugin, str):  # The plugin name
-        _plugin = plugin
-        return parse
+    
+    if func is None:
+        # Called as @remote(plugin='SomePlugin')
+        return decorator
     else:
-        _plugin = ''
-        return parse(plugin)  # The decorated function
+        # Called as @remote
+        return decorator(func)
